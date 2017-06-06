@@ -1,0 +1,20 @@
+{
+    "collab_server" : "",
+    "contents" : "plot_predictionlist<-function(predlist, type=\"ROC\", return.data=FALSE, r=0.05, fun.min=\"min\", fun.max=\"max\", col=\"black\", ribbon=FALSE ){\n  \n  stopifnot( type %in% c(\"ROC\",\"AUPRC\") )\n  \n  if ( type==\"ROC\" ){\n    \n    curves<-lapply(predlist, function(x){data.frame(x$roc$curve)})    \n    curves<-lapply(curves, setNames, c(\"FPR\",\"TPR\",\"Cutoff\") )\n    \n    n <- sapply(curves, nrow)\n    \n    var.x<-\"FPR\"\n    var.y<-\"TPR\"\n    \n    curves<-data.frame( do.call(rbind, curves) )\n    \n  }\n  \n  if ( type==\"AUPRC\" ){\n    \n    curves<-lapply(predlist, function(x){data.frame(x$pr$curve)})\n    curves<-lapply(curves, setNames, c(\"Recall\",\"Precision\",\"Cutoff\") )\n    \n    n <- sapply(curves, nrow)\n    \n    var.x<-\"Recall\"\n    var.y<-\"Precision\"\n    \n    curves<-data.frame( do.call(rbind, curves) )\n    \n  }\n  \n  curves[,var.x]<- round(curves[,var.x]/r)*r\n  \n  \n  if ( type == \"AUPRC\" ){\n    \n    curves.summary<-data.table(curves)[, list(\"mean\"=mean(Precision),\"sd\"=sd(Precision),\"min\"=min(Precision),\"max\"=max(Precision),\"mean.cutoff\"=mean(Cutoff),\"sd.cutoff\"=sd(Cutoff),\"max.cutoff\"=max(Cutoff),\"min.cutoff\"=min(Cutoff)), by=Recall]\n    setnames(curves.summary, \"Recall\",\"x\")\n    \n  }\n  \n  \n  if ( type == \"ROC\" ){\n    \n    curves.summary<-data.table(curves)[, list(\"mean\"=mean(TPR),\"sd\"=sd(TPR),\"min\"=min(TPR),\"max\"=max(TPR),\"mean.cutoff\"=mean(Cutoff),\"sd.cutoff\"=sd(Cutoff),\"max.cutoff\"=max(Cutoff),\"min.cutoff\"=min(Cutoff)), by=FPR]\n    setnames(curves.summary, \"FPR\", \"x\")\n    \n  }\n  \n  if (ribbon){ print( ggplot()+\n          geom_ribbon(data=data.frame(curves.summary),aes(ymin=curves.summary$min, ymax=curves.summary$max, x=x), alpha=0.075, fill=col, col=col)+\n          geom_line(data=data.frame(curves.summary), aes(x=x, y=mean), alpha=0.75, linetype=3)+\n          stat_summary(data=curves, aes_string(x=var.x, y=var.y), fun.y=mean, fun.ymax = fun.max, fun.ymin=fun.min)+\n          xlab(var.x)+\n          ylab(names(curves)[2])+\n          theme_minimal())\n\n  } else{print( ggplot()+\n          geom_line(data=data.frame(curves.summary), aes(x=x, y=mean), alpha=0.75, linetype=3)+\n          stat_summary(data=curves, aes_string(x=var.x, y=var.y), fun.y=mean, fun.ymax = fun.max, fun.ymin=fun.min)+\n          xlab(var.x)+\n          ylab(names(curves)[2])+\n          theme_minimal())\n  }\n  \n  \n  curves.summary<-data.frame(curves.summary)\n  colnames(curves.summary)<-c(var.x, paste(names(curves)[2],colnames(curves.summary)[2:4],sep=\".\"),\"mean.cutoff\",\"sd.cutoff\")\n  \n  if ( return.data==TRUE ) return(curves.summary)\n  \n}\n\n.datatable.aware=TRUE\n\n\n\n",
+    "created" : 1468364464910.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3385026077",
+    "id" : "3CEEE14A",
+    "lastKnownWriteTime" : 1468539470,
+    "last_content_update" : 1468539470437,
+    "path" : "~/OneDrive/Masters/Publication/server.train.limb/tunetest/R/plot_predictionlist.R",
+    "project_path" : "R/plot_predictionlist.R",
+    "properties" : {
+    },
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
