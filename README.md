@@ -12,7 +12,7 @@ install.packages("./tunetest", repos=NULL, type="source")
 ```
 
 * tune_models.R contains the code used to fit chromatin and sequence models
-* pre-cumputed output files ('chrom.models.Rdata' & 'seq.models.Rdata') can be found in the "model_combining" folder
+* pre-cumputed output data of this script ('chrom.models.Rdata' & 'seq.models.Rdata') can be found in the "model_combining" folder
 
 
 #### Model combining
