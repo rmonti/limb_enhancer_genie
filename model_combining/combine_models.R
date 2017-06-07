@@ -1,4 +1,5 @@
-# we import the tuned models and data again...
+# we import the tuned models and training data again...
+
 load("chrom.models.Rdata")
 load("seq.models.Rdata")
 load("ML_data_summary_train_scaled.Rdata")
@@ -16,35 +17,38 @@ require(randomForest)
 require(glmnet)
 require(caret)
 require(PRROC)
-require(ROCR)
 require(plyr)
-require(doMC)
+require(ggplot2)
+require(RColorBrewer)
 
 # predicting the models on their 'leave one out' test sets:
+# i.e. call to tunetest::predict()
 predictions.chromatin<-lapply( tunedmodels.chrom, function(model){ lapply(model, function(feature){lapply(feature, function(fold){predict(fold, type="prob")} )} )} )
 predictions.seq<-lapply( tunedmodels.seq, function(model){ lapply(model, function(feature){lapply(feature, function(fold){predict(fold, type="prob")} )} )} )
 
-# builing the matrix to fit the GLMs on:
-
-# 'n' simply contains the number of observations per fold
-n<-as.vector( lapply( predictions.chromatin, function(model){ lapply(model, function(feature){do.call("rbind", lapply(feature, function(fold){nrow(fold$test.pred)}) ) } )} )$rf$all )
 # combining the predictions on the test sets...
 preds.chromatin<-lapply( predictions.chromatin, function(model){ lapply(model, function(feature){unlist( lapply(feature, function(fold){fold$test.pred[,1]}) ) } )} )
 preds.seq<-lapply( predictions.seq, function(model){ lapply(model, function(feature){ unlist( lapply(feature, function(fold){fold$test.pred[,1]}) ) } )} )
 
-# fitting GLM on outputs...
 # merging into one big data.frame
 preds<-data.frame( "chromatin.LASSO"=preds.chromatin$lasso$all, "chromatin.SVMlin"=preds.chromatin$svm.lin$all, "chromatin.SVMrad"=preds.chromatin$svm.rad$all, "chromatin.RF"=preds.chromatin$rf$all, "sequence.LASSO"=preds.seq$lasso$all, "sequence.SVMlin"=preds.seq$svm.lin$all, "sequence.RF"=preds.seq$rf$all)
-preds<-apply(preds,2,unlist)
-preds<-data.frame(preds)
+preds<-data.frame(apply(preds,2,unlist))
 
 # assign fold information
+# 'n' simply contains the number of observations per fold
+n<-as.vector( lapply( predictions.chromatin, function(model){ lapply(model, function(feature){do.call("rbind", lapply(feature, function(fold){nrow(fold$test.pred)}) ) } )} )$rf$all )
 preds$n<-rep(1:10,n)
 preds$y<-unlist( lapply(predictions.chromatin$lasso$all, function(x){x$test.pred[,2]}))
 
+# forming all possible 9 v 1 splits :
+combs<-combn(x = 10, 9)
+
+# The function below acts on the columns of 'combs'
+# it combines the corresponding folds using Ridge regularized regression and the sum of ranks
+# performances for all models are returned
+# it operates on the objects generated above and the indexes are hard-coded (so watch out what you are doing...)
 set.seed(80085)
-# this is the function that takes a set of folds for which to combine predictions and provides the auprc and roc for the resulting models...
-# it operates on the objects generated above and the indexes are hard-coded (so watch out)
+
 fit_ridge<-function(i){
   
   data.train<-preds[ preds$n %in% combs[,i], ]
@@ -54,7 +58,7 @@ fit_ridge<-function(i){
   y <- data.train$y
   x <- as.matrix(data.train[,1:7])
   
-  # setting observations weights for the Ridge-GLM to fit (balance weights for positive and negative classes)
+  # setting observations weights for the Ridge-GLM (balance weights for positive and negative classes)
   obsweights<-rep(1, length(y))
   tab<-table(y)
   wgt<-as.numeric(tab["negative"]/tab["positive"])
@@ -66,7 +70,7 @@ fit_ridge<-function(i){
   model.sequence<-cv.glmnet(x[,5:7],y,type.measure="mse",nfolds=10,alpha=0,family="binomial", weights = obsweights)
   model.mixed<-cv.glmnet(x[,1:7],y,type.measure="mse",nfolds=10,alpha=0,family="binomial", weights = obsweights)
   
-  # see below what this function does (retrieves the original prs and rocs of single models)
+  # this function retrieves the original auprcs and aurocs of single models (see below)
   single.perfs<-get_perf.test(data.test)
   
   pred.chromatin<-as.vector( predict(model.chromatin, newx=as.matrix(data.test[,-c(5:9)]), type="response",s="lambda.1se") )
@@ -101,7 +105,7 @@ fit_ridge<-function(i){
   roc.sor.chromatin<-roc.curve(pred.sor.chromatin[ind.pos],pred.sor.chromatin[ind.neg],curve=T)
   roc.sor.combined<-roc.curve(pred.sor.combined[ind.pos],pred.sor.combined[ind.neg],curve=T)
   
-  # also getting the coefficients, because we can.
+  # getting coefficients ("weights")
   coefs<-coef(model.mixed, "lambda.1se")
   
   combined.res<-matrix(c(pr.chromatin$auc.integral, roc.chromatin$auc, pr.sequence$auc.integral, roc.sequence$auc, pr.sor.sequence$auc.integral, roc.sor.sequence$auc, pr.sor.chromatin$auc.integral, roc.sor.chromatin$auc, pr.sor.combined$auc.integral, roc.sor.combined$auc, pr.mixed$auc.integral, roc.mixed$auc), nrow=2 )
@@ -125,10 +129,6 @@ get_perf.test<-function(data.test){
   
 }
 
-# forming all possible 9 v 1 splits :
-# combining 9:1
-
-combs<-combn(x = 10, 9)
 res<-vector("list",ncol(combs))
 
 for( r in 1:ncol(combs) ){
@@ -162,3 +162,5 @@ weights[ y=="positive" ]<-as.numeric(tab["negative"]/tab["positive"])
 
 ridge<-cv.glmnet( as.matrix(preds), y = y, weights = weights, type.measure = "mse", family="binomial", alpha=0 )
 coef(ridge)
+
+# done!
